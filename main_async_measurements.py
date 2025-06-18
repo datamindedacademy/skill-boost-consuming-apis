@@ -101,10 +101,10 @@ async def save_to_csv(measurements, filename=None):
 
 
 async def ingest_measurements_async(
-    max_pages=5, page_size=10, total=100, device_id=None
+    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
 ):
     """
-    Ingest measurements from the API and save them to a CSV file using asyncio.
+    Ingest measurements from the API and optionally save them to a CSV file using asyncio.
 
     This implementation creates separate tasks for each page and runs them concurrently.
 
@@ -113,9 +113,10 @@ async def ingest_measurements_async(
         page_size: Number of items per page
         total: Total number of measurements to generate
         device_id: Filter by device ID
+        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file
+        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
     """
     all_measurements = []
 
@@ -159,12 +160,17 @@ async def ingest_measurements_async(
 
             print(f"Fetched {len(measurements)} measurements from page {page_num}")
 
-    # Save all measurements to CSV
+    # Save all measurements to CSV if requested
     print(f"Total measurements fetched: {len(all_measurements)}")
-    return await save_to_csv(all_measurements, filename)
+    if save_to_file:
+        return await save_to_csv(all_measurements, filename)
+    else:
+        return all_measurements
 
 
-def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
+def ingest_measurements(
+    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
+):
     """
     Wrapper function to run the async function from synchronous code.
 
@@ -173,13 +179,18 @@ def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
         page_size: Number of items per page
         total: Total number of measurements to generate
         device_id: Filter by device ID
+        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file
+        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
     """
     return asyncio.run(
         ingest_measurements_async(
-            max_pages=max_pages, page_size=page_size, total=total, device_id=device_id
+            max_pages=max_pages,
+            page_size=page_size,
+            total=total,
+            device_id=device_id,
+            save_to_file=save_to_file,
         )
     )
 

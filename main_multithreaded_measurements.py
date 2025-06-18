@@ -120,18 +120,21 @@ def save_to_csv(measurements, filename=None):
     return filename
 
 
-def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
+def ingest_measurements(
+    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
+):
     """
-    Ingest measurements from the API and save them to a CSV file using multithreading.
+    Ingest measurements from the API and optionally save them to a CSV file using multithreading.
 
     Args:
         max_pages: Maximum number of pages to fetch
         page_size: Number of items per page
         total: Total number of measurements to generate
         device_id: Filter by device ID
+        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file
+        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
     """
     all_measurements = []
 
@@ -175,9 +178,12 @@ def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
             print("No more pages available.")
             break
 
-    # Save all measurements to CSV
+    # Save all measurements to CSV if requested
     print(f"Total measurements fetched: {len(all_measurements)}")
-    return save_to_csv(all_measurements, filename)
+    if save_to_file:
+        return save_to_csv(all_measurements, filename)
+    else:
+        return all_measurements
 
 
 def main():

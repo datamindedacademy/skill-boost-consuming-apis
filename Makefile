@@ -18,12 +18,7 @@ run-api:
 # Run benchmark tests
 benchmark: install
 	@echo "Running benchmark tests..."
-	uv run -m pytest -v
-
-# Run all tests
-test: install-dev
-	@echo "Running all tests..."
-	uv run -m pytest
+	uv run -m pytest -v -s
 
 # Clean up
 clean:
