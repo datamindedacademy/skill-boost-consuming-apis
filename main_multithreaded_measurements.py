@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Device Measurements API Ingestion Script (Synchronous)
+Device Measurements API Ingestion Script (Multithreaded)
 
 This script fetches device measurements from the local API and saves them to a CSV file.
-It uses the requests library for synchronous HTTP requests.
+It uses the standard library's threading module for concurrent HTTP requests.
 """
 
 import csv
+import queue
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import requests
@@ -49,6 +51,26 @@ def fetch_measurements(page=1, size=10, total=100, device_id=None):
         return None
 
 
+def fetch_page_worker(page, size, total, device_id, result_queue):
+    """
+    Worker function to fetch a page of measurements and put the result in a queue.
+
+    Args:
+        page: Page number to fetch
+        size: Number of items per page
+        total: Total number of measurements to generate
+        device_id: Filter by device ID
+        result_queue: Queue to put the result in
+    """
+    print(f"Thread fetching page {page}...")
+    response = fetch_measurements(
+        page=page, size=size, total=total, device_id=device_id
+    )
+
+    # Put a tuple of (page_number, response) in the queue
+    result_queue.put((page, response))
+
+
 def save_to_csv(measurements, filename=None):
     """
     Save measurements to a CSV file.
@@ -63,7 +85,7 @@ def save_to_csv(measurements, filename=None):
     # Generate filename if not provided
     if not filename:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"device_measurements_{timestamp}.csv"
+        filename = f"device_measurements_threaded_{timestamp}.csv"
 
     if not measurements:
         print("No measurements to save.")
@@ -100,7 +122,7 @@ def save_to_csv(measurements, filename=None):
 
 def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
     """
-    Ingest measurements from the API and save them to a CSV file.
+    Ingest measurements from the API and save them to a CSV file using multithreading.
 
     Args:
         max_pages: Maximum number of pages to fetch
@@ -115,23 +137,38 @@ def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
 
     # Create timestamp for the CSV filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"device_measurements_{timestamp}.csv"
+    filename = f"device_measurements_threaded_{timestamp}.csv"
 
+    # Create a queue to store the results
+    result_queue = queue.Queue()
+
+    # Create and start threads for each page
+    with ThreadPoolExecutor(max_workers=max_pages) as executor:
+        # Submit tasks to the executor
+        for page in range(1, max_pages + 1):
+            executor.submit(
+                fetch_page_worker, page, page_size, total, device_id, result_queue
+            )
+
+    # Process the results from the queue
+    results = {}
+    while not result_queue.empty():
+        page, response = result_queue.get()
+        results[page] = response
+
+    # Process the results in order
     for page in range(1, max_pages + 1):
-        print(f"Fetching page {page}...")
-        response = fetch_measurements(
-            page=page, size=page_size, total=total, device_id=device_id
-        )
+        response = results.get(page)
 
         if not response:
-            print(f"Failed to fetch page {page}. Stopping.")
-            break
+            print(f"No result for page {page}.")
+            continue
 
         # Extract measurements from the response
         measurements = response.get("items", [])
         all_measurements.extend(measurements)
 
-        print(f"Fetched {len(measurements)} measurements from page {page}")
+        print(f"Processed {len(measurements)} measurements from page {page}")
 
         # Check if we've reached the last page
         if len(measurements) < page_size:
@@ -139,6 +176,7 @@ def ingest_measurements(max_pages=5, page_size=10, total=100, device_id=None):
             break
 
     # Save all measurements to CSV
+    print(f"Total measurements fetched: {len(all_measurements)}")
     return save_to_csv(all_measurements, filename)
 
 
@@ -146,7 +184,7 @@ def main():
     """
     Main function to run the script.
     """
-    print("Starting Device Measurements API ingestion...")
+    print("Starting Device Measurements API ingestion (multithreaded)...")
 
     # Example usage: fetch measurements
     filename = ingest_measurements(max_pages=3, page_size=10, total=100)
