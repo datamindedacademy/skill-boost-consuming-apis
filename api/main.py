@@ -135,7 +135,7 @@ async def get_measurements_unreliable(
     if unseeded_random.random() < 0.3:
         raise HTTPException(
             status_code=500,
-            detail="Internal Server Error: This endpoint has a 10% chance of failing",
+            detail="Internal Server Error: contact support for more information.",
         )
 
     # Generate the measurements
