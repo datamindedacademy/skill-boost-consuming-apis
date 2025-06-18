@@ -9,8 +9,3 @@ dependencies = [
     "aiohttp>=3.9.3",
     "python-dotenv>=1.0.1",
 ]
-
-[tool.uv.workspace]
-members = [
-    "api",
-]
