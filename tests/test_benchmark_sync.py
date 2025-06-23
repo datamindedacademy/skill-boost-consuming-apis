@@ -24,7 +24,7 @@ from main_multithreaded_measurements import (
 from main_sync import ingest_measurements as ingest_measurements_sync
 
 # Reduce the number of iterations for faster benchmarking
-ITERATIONS = 10
+ITERATIONS = 1
 ROUNDS = 1
 
 # Test parameters

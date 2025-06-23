@@ -12,7 +12,7 @@ from datetime import datetime
 import requests
 
 # API base URL and endpoint
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://skillboost.playground.dataminded.cloud"
 MEASUREMENTS_ENDPOINT = "/measurements/page"
 
 
