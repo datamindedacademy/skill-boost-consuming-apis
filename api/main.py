@@ -140,11 +140,11 @@ async def get_measurements_unreliable(
 
     # Generate the measurements
     measurements = generate_measurements(total, device_id)
-    
+
     # Set up pagination parameters
     set_page(Page[Measurement])
     set_params(Params(page=page, size=size))
-    
+
     # Apply pagination to the measurements
     return paginate(measurements)
 

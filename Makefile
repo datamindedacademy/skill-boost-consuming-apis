@@ -1,5 +1,8 @@
 .PHONY: install run-api clean benchmark test
 
+AWS_REGION = eu-west-1
+AWS_ACCOUNT_ID = 299641483789
+
 # Default target
 all: install
 
@@ -31,6 +34,17 @@ clean:
 	rm -rf tests/__pycache__
 	rm -f device_measurements_*.csv
 
+# Docker commands
+docker-build:
+	@echo "Building Docker image for linux/amd64..."
+	docker build --platform linux/amd64 -t skill-boost-api api
+
+docker-push:
+	@echo "Pushing Docker image to ECR..."
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+	docker tag skill-boost-api:latest $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/skill-boost-api:latest
+	docker push $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/skill-boost-api:latest
+
 # Help command
 help:
 	@echo "Available commands:"
@@ -40,4 +54,6 @@ help:
 	@echo "  make benchmark   - Run benchmark tests"
 	@echo "  make test        - Run all tests"
 	@echo "  make clean       - Clean up generated files and caches"
+	@echo "  make docker-build - Build the Docker image"
+	@echo "  make docker-push  - Push the Docker image to ECR"
 	@echo "  make help        - Show this help message"
