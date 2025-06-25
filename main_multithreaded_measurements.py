@@ -8,17 +8,50 @@ It uses the standard library's threading module for concurrent HTTP requests.
 
 import csv
 import queue
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+import logging
+import sys
+from tenacity import (
+    Retrying,
+    before_sleep_log,
+    stop_after_attempt,
+    wait_fixed,
+    retry_if_exception_type,
+    retry
+)
 
 import requests
+
+logging.basicConfig(
+    format="%(asctime)s: %(levelname)s: %(threadName)s: %(message)s [%(filename)s:%(lineno)d in function %(funcName)s]",
+    stream=sys.stderr,
+    level=logging.DEBUG,
+)
+
+logger = logging.getLogger(__name__)
+
 
 # API base URL and endpoint
 BASE_URL = "https://skillboost.playground.dataminded.cloud"
 MEASUREMENTS_ENDPOINT = "/measurements/page"
+RELIABLE_ENDPOINT = "measurements/very-reliable"
+MAX_RETRIES = 5
+MAX_WORKERS = 5
 
-
-def fetch_measurements(page=1, size=10, total=100, device_id=None):
+@retry(
+    retry=retry_if_exception_type(requests.exceptions.HTTPError),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    wait=wait_fixed(0.5),
+    stop=stop_after_attempt(MAX_RETRIES),
+)
+def fetch_page(
+    session: requests.Session,
+    url,
+    page=1,
+    size=10,
+    total=100,
+):
     """
     Fetch measurements from the API using synchronous requests.
 
@@ -31,44 +64,20 @@ def fetch_measurements(page=1, size=10, total=100, device_id=None):
     Returns:
         JSON response from the API
     """
+
     # Prepare parameters
     params = {"page": page, "size": size, "total": total}
 
-    if device_id:
-        params["device_id"] = device_id
+    # Not using a context manager on a response object, results in a memory leak
+    with session.get(
+        url=url,
+        params=params,
+    ) as response:
 
-    url = f"{BASE_URL}{MEASUREMENTS_ENDPOINT}"
-
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
+        if response.status_code in (200, 201):
             return response.json()
-        else:
-            print(f"Error: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        print(f"Exception during API request: {e}")
-        return None
 
-
-def fetch_page_worker(page, size, total, device_id, result_queue):
-    """
-    Worker function to fetch a page of measurements and put the result in a queue.
-
-    Args:
-        page: Page number to fetch
-        size: Number of items per page
-        total: Total number of measurements to generate
-        device_id: Filter by device ID
-        result_queue: Queue to put the result in
-    """
-    print(f"Thread fetching page {page}...")
-    response = fetch_measurements(
-        page=page, size=size, total=total, device_id=device_id
-    )
-
-    # Put a tuple of (page_number, response) in the queue
-    result_queue.put((page, response))
+        response.raise_for_status()
 
 
 def save_to_csv(measurements, filename=None):
@@ -120,8 +129,13 @@ def save_to_csv(measurements, filename=None):
     return filename
 
 
-def ingest_measurements(
-    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
+def ingest_endpoint(
+    url: str = f"{BASE_URL}/{MEASUREMENTS_ENDPOINT}",
+    endpoint:str = "measurements",
+    max_pages=5,
+    page_size=10,
+    total=100,
+    save_to_file=True,
 ):
     """
     Ingest measurements from the API and optionally save them to a CSV file using multithreading.
@@ -136,66 +150,100 @@ def ingest_measurements(
     Returns:
         Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
     """
-    all_measurements = []
+    all_results = []
 
     # Create timestamp for the CSV filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"device_measurements_threaded_{timestamp}.csv"
+    filename = f"device_{endpoint}_threaded_{timestamp}.csv"
 
-    # Create a queue to store the results
-    result_queue = queue.Queue()
+    with requests.Session() as session:
+        # Create and start threads for each page
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            # Submit tasks to the executor
+            page_futures = {
+                executor.submit(
+                    fetch_page, session, url, page, page_size, total,
+                ): page
+                for page in range(1, max_pages + 1)
+            }
 
-    # Create and start threads for each page
-    with ThreadPoolExecutor(max_workers=max_pages) as executor:
-        # Submit tasks to the executor
-        for page in range(1, max_pages + 1):
-            executor.submit(
-                fetch_page_worker, page, page_size, total, device_id, result_queue
-            )
+        for future in as_completed(page_futures):
+            response = future.result()
+            page = page_futures.pop(future)
 
-    # Process the results from the queue
-    results = {}
-    while not result_queue.empty():
-        page, response = result_queue.get()
-        results[page] = response
+            # process api call result
+            if not response:
+                logger.info(f"No result for page {page}.")
+                continue
 
-    # Process the results in order
-    for page in range(1, max_pages + 1):
-        response = results.get(page)
+            results = response.get("items", [])
+            all_results.extend(results)
+            logger.info(f"Processed {len(results)} measurements from page {page}")
 
-        if not response:
-            print(f"No result for page {page}.")
-            continue
-
-        # Extract measurements from the response
-        measurements = response.get("items", [])
-        all_measurements.extend(measurements)
-
-        print(f"Processed {len(measurements)} measurements from page {page}")
-
-        # Check if we've reached the last page
-        if len(measurements) < page_size:
-            print("No more pages available.")
-            break
+            # Check if we've reached the last page
+            if len(results) < page_size:
+                logger.info("No more pages available.")
+                break
 
     # Save all measurements to CSV if requested
-    print(f"Total measurements fetched: {len(all_measurements)}")
+    logger.info(f"Total measurements fetched: {len(all_results)}")
     if save_to_file:
-        return save_to_csv(all_measurements, filename)
+        return save_to_csv(all_results, filename)
     else:
-        return all_measurements
+        return all_results
+
+def ingest_measurements(
+    max_pages=5,
+    page_size=10,
+    total=100,
+    save_to_file=True):
+
+    measurements_url=f"{BASE_URL}/{MEASUREMENTS_ENDPOINT}"
+
+    logger.info("Starting Device Measurements API ingestion (multithreaded)...")
+
+    filename = ingest_endpoint(
+        url=measurements_url,
+        endpoint="measurements",
+        max_pages=max_pages,
+        page_size=page_size,
+        total=total,
+        save_to_file=save_to_file,
+    )
+
+    logger.info(f"Completed! Data saved to {filename}")
+
+    return filename
+
+def ingest_measurements_reliable(
+    max_pages=5,
+    page_size=10,
+    total=100,
+    save_to_file=True):
+
+    measurements_url=f"{BASE_URL}/{RELIABLE_ENDPOINT}"
+
+    logger.info("Starting Device Measurements API ingestion (multithreaded)...")
+
+    filename = ingest_endpoint(
+        url=measurements_url,
+        endpoint="measurements",
+        max_pages=max_pages,
+        page_size=page_size,
+        total=total,
+        save_to_file=save_to_file,
+    )
+
+    logger.info(f"Completed! Data saved to {filename}")
+
+    return filename
 
 
 def main():
     """
     Main function to run the script.
     """
-    print("Starting Device Measurements API ingestion (multithreaded)...")
-
-    # Example usage: fetch measurements
-    filename = ingest_measurements(max_pages=3, page_size=10, total=100)
-
-    print(f"Completed! Data saved to {filename}")
+    ingest_measurements_reliable()
 
 
 if __name__ == "__main__":
