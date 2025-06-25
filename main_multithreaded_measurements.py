@@ -169,6 +169,7 @@ def ingest_endpoint(
 
         for future in as_completed(page_futures):
             response = future.result()
+            # Make sure each future is cleared from memory
             page = page_futures.pop(future)
 
             # process api call result
