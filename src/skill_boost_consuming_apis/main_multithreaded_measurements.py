@@ -6,9 +6,7 @@ This script fetches device measurements from the local API and saves them to a C
 It uses the standard library's threading module for concurrent HTTP requests.
 """
 
-import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 import logging
 import sys
 from tenacity import (
@@ -79,53 +77,6 @@ def fetch_page(
         response.raise_for_status()
 
 
-def save_to_csv(measurements, filename=None):
-    """
-    Save measurements to a CSV file.
-
-    Args:
-        measurements: List of measurement objects from the API
-        filename: Name of the CSV file to save to
-
-    Returns:
-        Filename of the saved CSV file
-    """
-    # Generate filename if not provided
-    if not filename:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"device_measurements_threaded_{timestamp}.csv"
-
-    if not measurements:
-        print("No measurements to save.")
-        # Create an empty file
-        with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["No measurements available"])
-        print(f"Created empty file: {filename}")
-        return filename
-
-    # Define CSV fields based on the measurement object structure
-    fields = [
-        "id",
-        "device_id",
-        "timestamp",
-        "temperature",
-        "humidity",
-        "pressure",
-        "battery_level",
-    ]
-
-    print(f"Saving {len(measurements)} measurements to {filename}...")
-
-    with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fields)
-        writer.writeheader()
-
-        for measurement in measurements:
-            writer.writerow(measurement)
-
-    print(f"Successfully saved to {filename}")
-    return filename
 
 
 def ingest_endpoint(
@@ -134,10 +85,9 @@ def ingest_endpoint(
     max_pages=5,
     page_size=10,
     total=100,
-    save_to_file=True,
 ):
     """
-    Ingest measurements from the API and optionally save them to a CSV file using multithreading.
+    Ingest measurements from the API using multithreading.
 
     Args:
         url: URL of the endpoint we want to consume
@@ -145,16 +95,11 @@ def ingest_endpoint(
         max_pages: Maximum number of pages to fetch
         page_size: Number of items per page
         total: Total number of measurements to generate
-        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
+        List of measurements
     """
     all_results = []
-
-    # Create timestamp for the CSV filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"device_{endpoint}_threaded_{timestamp}.csv"
 
     with requests.Session() as session:
         # Create and start threads for each page
@@ -186,65 +131,60 @@ def ingest_endpoint(
                 logger.info("No more pages available.")
                 break
 
-    # Save all measurements to CSV if requested
+    # Return all measurements
     logger.info(f"Total measurements fetched: {len(all_results)}")
-    if save_to_file:
-        return save_to_csv(all_results, filename)
-    else:
-        return all_results
+    return all_results
 
 def ingest_measurements(
+    endpoint: str = MEASUREMENTS_ENDPOINT,
     max_pages=5,
     page_size=10,
-    total=100,
-    save_to_file=True):
+    total=100):
 
-    measurements_url=f"{BASE_URL}/{MEASUREMENTS_ENDPOINT}"
+    measurements_url=f"{BASE_URL}{endpoint}"
 
     logger.info("Starting Device Measurements API ingestion (multithreaded)...")
 
-    filename = ingest_endpoint(
+    measurements = ingest_endpoint(
         url=measurements_url,
         endpoint="measurements",
         max_pages=max_pages,
         page_size=page_size,
         total=total,
-        save_to_file=save_to_file,
     )
 
-    logger.info(f"Completed! Data saved to {filename}")
+    logger.info(f"Completed! Fetched {len(measurements)} measurements")
 
-    return filename
+    return measurements
 
 def ingest_measurements_reliable(
+    endpoint: str = f"/{RELIABLE_ENDPOINT}",
     max_pages=5,
     page_size=10,
-    total=100,
-    save_to_file=True):
+    total=100):
 
-    measurements_url=f"{BASE_URL}/{RELIABLE_ENDPOINT}"
+    measurements_url=f"{BASE_URL}{endpoint}"
 
     logger.info("Starting Device Measurements API ingestion (multithreaded)...")
 
-    filename = ingest_endpoint(
+    measurements = ingest_endpoint(
         url=measurements_url,
         endpoint="measurements",
         max_pages=max_pages,
         page_size=page_size,
         total=total,
-        save_to_file=save_to_file,
     )
 
-    logger.info(f"Completed! Data saved to {filename}")
+    logger.info(f"Completed! Fetched {len(measurements)} measurements")
 
-    return filename
+    return measurements
 
 
 def main():
     """
     Main function to run the script.
     """
-    ingest_measurements_reliable()
+    ingest_measurements_reliable(endpoint=f"/{RELIABLE_ENDPOINT}")
 
 
 if __name__ == "__main__":

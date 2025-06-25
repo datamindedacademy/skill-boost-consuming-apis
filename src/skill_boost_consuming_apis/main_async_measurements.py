@@ -7,8 +7,6 @@ It uses asyncio and aiohttp for asynchronous HTTP requests.
 """
 
 import asyncio
-import csv
-from datetime import datetime
 
 import aiohttp
 
@@ -17,16 +15,16 @@ BASE_URL = "https://skillboost.playground.dataminded.cloud"
 MEASUREMENTS_ENDPOINT = "/measurements/page"
 
 
-async def fetch_measurements(session, page=1, size=10, total=100, device_id=None):
+async def fetch_measurements(session, endpoint: str, page=1, size=10, total=100):
     """
     Fetch measurements from the API using asynchronous requests.
 
     Args:
         session: aiohttp ClientSession
+        endpoint: API endpoint to fetch from
         page: Page number to fetch
         size: Number of items per page
         total: Total number of measurements to generate
-        device_id: Filter by device ID
 
     Returns:
         JSON response from the API
@@ -34,10 +32,7 @@ async def fetch_measurements(session, page=1, size=10, total=100, device_id=None
     # Prepare parameters
     params = {"page": page, "size": size, "total": total}
 
-    if device_id:
-        params["device_id"] = device_id
-
-    url = f"{BASE_URL}{MEASUREMENTS_ENDPOINT}"
+    url = f"{BASE_URL}{endpoint}"
 
     try:
         async with session.get(url, params=params) as response:
@@ -51,78 +46,26 @@ async def fetch_measurements(session, page=1, size=10, total=100, device_id=None
         return None
 
 
-async def save_to_csv(measurements, filename=None):
-    """
-    Save measurements to a CSV file.
-
-    Args:
-        measurements: List of measurement objects from the API
-        filename: Name of the CSV file to save to
-
-    Returns:
-        Filename of the saved CSV file
-    """
-    # Generate filename if not provided
-    if not filename:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"device_measurements_async_{timestamp}.csv"
-
-    if not measurements:
-        print("No measurements to save.")
-        # Create an empty file
-        with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["No measurements available"])
-        print(f"Created empty file: {filename}")
-        return filename
-
-    # Define CSV fields based on the measurement object structure
-    fields = [
-        "id",
-        "device_id",
-        "timestamp",
-        "temperature",
-        "humidity",
-        "pressure",
-        "battery_level",
-    ]
-
-    print(f"Saving {len(measurements)} measurements to {filename}...")
-
-    with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fields)
-        writer.writeheader()
-
-        for measurement in measurements:
-            writer.writerow(measurement)
-
-    print(f"Successfully saved to {filename}")
-    return filename
 
 
 async def ingest_measurements_async(
-    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
+    endpoint: str, max_pages=5, page_size=10, total=100
 ):
     """
-    Ingest measurements from the API and optionally save them to a CSV file using asyncio.
+    Ingest measurements from the API using asyncio.
 
     This implementation creates separate tasks for each page and runs them concurrently.
 
     Args:
+        endpoint: API endpoint to fetch from
         max_pages: Maximum number of pages to fetch
         page_size: Number of items per page
         total: Total number of measurements to generate
-        device_id: Filter by device ID
-        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
+        List of measurements
     """
     all_measurements = []
-
-    # Create timestamp for the CSV filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"device_measurements_async_{timestamp}.csv"
 
     async with aiohttp.ClientSession() as session:
         # Create a task for each page
@@ -131,7 +74,7 @@ async def ingest_measurements_async(
             print(f"Creating task for page {page}...")
             task = asyncio.create_task(
                 fetch_measurements(
-                    session, page=page, size=page_size, total=total, device_id=device_id
+                    session, endpoint=endpoint, page=page, size=page_size, total=total
                 )
             )
             tasks.append(task)
@@ -160,37 +103,32 @@ async def ingest_measurements_async(
 
             print(f"Fetched {len(measurements)} measurements from page {page_num}")
 
-    # Save all measurements to CSV if requested
+    # Return all measurements
     print(f"Total measurements fetched: {len(all_measurements)}")
-    if save_to_file:
-        return await save_to_csv(all_measurements, filename)
-    else:
-        return all_measurements
+    return all_measurements
 
 
 def ingest_measurements(
-    max_pages=5, page_size=10, total=100, device_id=None, save_to_file=True
+    endpoint: str = MEASUREMENTS_ENDPOINT, max_pages=5, page_size=10, total=100
 ):
     """
     Wrapper function to run the async function from synchronous code.
 
     Args:
+        endpoint: API endpoint to fetch from
         max_pages: Maximum number of pages to fetch
         page_size: Number of items per page
         total: Total number of measurements to generate
-        device_id: Filter by device ID
-        save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
-        Filename of the saved CSV file if save_to_file is True, otherwise the list of measurements
+        List of measurements
     """
     return asyncio.run(
         ingest_measurements_async(
+            endpoint=endpoint,
             max_pages=max_pages,
             page_size=page_size,
             total=total,
-            device_id=device_id,
-            save_to_file=save_to_file,
         )
     )
 
@@ -202,9 +140,9 @@ def main():
     print("Starting Device Measurements API ingestion (async)...")
 
     # Example usage: fetch measurements
-    filename = ingest_measurements(max_pages=3, page_size=10, total=100)
+    measurements = ingest_measurements(endpoint=MEASUREMENTS_ENDPOINT, max_pages=3, page_size=10, total=100)
 
-    print(f"Completed! Data saved to {filename}")
+    print(f"Completed! Fetched {len(measurements)} measurements")
 
 
 if __name__ == "__main__":
