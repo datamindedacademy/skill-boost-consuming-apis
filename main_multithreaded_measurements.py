@@ -7,13 +7,11 @@ It uses the standard library's threading module for concurrent HTTP requests.
 """
 
 import csv
-import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import logging
 import sys
 from tenacity import (
-    Retrying,
     before_sleep_log,
     stop_after_attempt,
     wait_fixed,
@@ -56,10 +54,11 @@ def fetch_page(
     Fetch measurements from the API using synchronous requests.
 
     Args:
+        session: request.Session object for performance
+        url: URL to execute GET request against
         page: Page number to fetch
         size: Number of items per page
         total: Total number of measurements to generate
-        device_id: Filter by device ID
 
     Returns:
         JSON response from the API
@@ -141,10 +140,11 @@ def ingest_endpoint(
     Ingest measurements from the API and optionally save them to a CSV file using multithreading.
 
     Args:
+        url: URL of the endpoint we want to consume
+        endpoint: endpoint name for logging
         max_pages: Maximum number of pages to fetch
         page_size: Number of items per page
         total: Total number of measurements to generate
-        device_id: Filter by device ID
         save_to_file: Whether to save the measurements to a CSV file
 
     Returns:
