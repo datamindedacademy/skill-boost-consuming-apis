@@ -74,20 +74,6 @@ def generate_measurements(
     return measurements
 
 
-@app.get("/measurements", response_model=List[Measurement], deprecated=True)
-async def get_measurements_legacy(
-    count: int = Query(
-        5, description="Number of measurements to generate", ge=1, le=100
-    ),
-    device_id: Optional[str] = Query(None, description="Filter by device ID"),
-):
-    """
-    Legacy endpoint without pagination (deprecated).
-    Use /measurements/page or /measurements/cursor instead.
-    """
-    return generate_measurements(count, device_id)[:count]
-
-
 @app.get("/measurements/page", response_model=Page[Measurement])
 async def get_measurements_page(
     total: int = Query(
