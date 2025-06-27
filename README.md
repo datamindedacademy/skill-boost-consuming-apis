@@ -7,7 +7,7 @@ This repository contains the exercises for the Skill Boost session on consuming 
 
 `/measurements/very-reliable`: an endpoint that, despite its name, is not very reliable and returns sometimes a 500 error.
 
-For a full description of the endpoints and the query parameters, there is an OpenAPI specification available at `/docs`. You can run the API either locally via `make run-api`, or deploy it in the Dataminded Playground AWS account by applying the Terraform configuration in the `infra` directory. This will create an ECS services that is available at `skillboost.playground.dataminded.cloud`.
+For a full description of the endpoints and the query parameters, there is an OpenAPI specification available at `/docs`. You can run the API either locally via `make run-api`, or deploy it in the Dataminded Playground AWS account by applying the Terraform configuration in the `infra` directory. This will create an ECS service that is available at `skillboost.playground.dataminded.cloud`.
 
 ## Exercises
 
