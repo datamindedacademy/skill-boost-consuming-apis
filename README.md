@@ -1,3 +1,4 @@
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/datamindedacademy/skill-boost-consuming-apis)
 # Skill Boost: Consuming APIs
 
 This repository contains the exercises for the Skill Boost session on consuming APIs. It contains the code for running and deploying a simple FastAPI application that exposes two endpoints:
