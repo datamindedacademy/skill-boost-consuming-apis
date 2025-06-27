@@ -21,7 +21,7 @@ run-api:
 # Run benchmark tests
 benchmark: install
 	@echo "Running benchmark tests..."
-	uv run -m pytest -v -s
+	uv run -m pytest -v -s tests/test_benchmark.py
 
 # Clean up
 clean:

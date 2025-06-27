@@ -33,7 +33,7 @@ BASE_URL = "https://skillboost.playground.dataminded.cloud"
 MEASUREMENTS_ENDPOINT = "/measurements/page"
 RELIABLE_ENDPOINT = "measurements/very-reliable"
 MAX_RETRIES = 5
-MAX_WORKERS = 5
+MAX_WORKERS = 100
 
 @retry(
     retry=retry_if_exception_type(requests.exceptions.HTTPError),
