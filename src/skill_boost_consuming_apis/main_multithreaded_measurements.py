@@ -23,7 +23,7 @@ BASE_URL = "https://skillboost.playground.dataminded.cloud"
 MEASUREMENTS_ENDPOINT = "/measurements/page"
 RELIABLE_ENDPOINT = "measurements/very-reliable"
 MAX_RETRIES = 5
-MAX_WORKERS = 5
+MAX_WORKERS = 100
 
 
 def ingest_measurements(
